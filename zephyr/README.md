@@ -13,6 +13,8 @@ The CS40L26 is a boosted haptic driver with integrated DSP and waveform memory, 
 - Hardware reset via GPIO
 - Basic diagnostic checks
 - Device power management status monitoring
+- **I2S/ASP audio interface control**
+- **Audio-to-haptic streaming support**
 - Logging support
 
 ## Directory Structure
@@ -24,6 +26,11 @@ zephyr/
 │       ├── cs40l26.c          # Main driver implementation
 │       ├── CMakeLists.txt     # Driver build configuration
 │       └── Kconfig            # Driver Kconfig options
+├── include/
+│   └── zephyr/
+│       └── drivers/
+│           └── haptic/
+│               └── cs40l26.h  # Public API header
 ├── dts/
 │   └── bindings/
 │       └── haptic/
@@ -167,6 +174,52 @@ int main(void)
 }
 ```
 
+### I2S/ASP Audio Interface
+
+The driver provides an API to control the I2S/ASP audio interface:
+
+```c
+#include <zephyr/device.h>
+#include <zephyr/drivers/haptic/cs40l26.h>
+
+#define CS40L26_NODE DT_NODELABEL(cs40l26)
+
+int main(void)
+{
+    const struct device *dev = DEVICE_DT_GET(CS40L26_NODE);
+    int ret;
+    
+    /* Start I2S interface for audio-to-haptic streaming */
+    ret = cs40l26_i2s_start(dev);
+    if (ret) {
+        printk("Failed to start I2S: %d\n", ret);
+        return ret;
+    }
+    
+    /* Check if I2S is enabled */
+    if (cs40l26_i2s_is_enabled(dev)) {
+        printk("I2S interface is active\n");
+    }
+    
+    /* Process audio... */
+    
+    /* Stop I2S interface */
+    ret = cs40l26_i2s_stop(dev);
+    if (ret) {
+        printk("Failed to stop I2S: %d\n", ret);
+        return ret;
+    }
+    
+    return 0;
+}
+```
+
+### API Functions
+
+- `int cs40l26_i2s_start(const struct device *dev)` - Start I2S/ASP interface
+- `int cs40l26_i2s_stop(const struct device *dev)` - Stop I2S/ASP interface  
+- `bool cs40l26_i2s_is_enabled(const struct device *dev)` - Check I2S status
+
 ## Sample Application
 
 A sample application is provided in `zephyr/samples/haptic/cs40l26/` that demonstrates:
@@ -174,7 +227,8 @@ A sample application is provided in `zephyr/samples/haptic/cs40l26/` that demons
 1. Device enumeration on SPI bus
 2. Device ID verification
 3. Basic diagnostic checks
-4. Continuous operation
+4. **I2S interface control (start/stop)**
+5. Continuous operation
 
 Build and run:
 

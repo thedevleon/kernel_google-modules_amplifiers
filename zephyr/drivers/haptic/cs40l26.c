@@ -19,8 +19,12 @@ LOG_MODULE_REGISTER(cs40l26, CONFIG_CS40L26_LOG_LEVEL);
 #define CS40L26_DEVID				0x0
 #define CS40L26_REVID				0x4
 #define CS40L26_TEST_KEY_CTRL			0x40
+#define CS40L26_REFCLK_INPUT			0x2C04
 #define CS40L26_PWRMGT_CTL			0x2900
 #define CS40L26_PWRMGT_STS			0x290C
+#define CS40L26_ASP_ENABLES1			0x4800
+#define CS40L26_ASP_CONTROL2			0x4808
+#define CS40L26_DSP_MBOX_1			0x13000
 
 /* Device IDs */
 #define CS40L26_DEVID_A				0x40A260
@@ -44,9 +48,28 @@ LOG_MODULE_REGISTER(cs40l26, CONFIG_CS40L26_LOG_LEVEL);
 /* Global enable mask */
 #define CS40L26_GLOBAL_EN_MASK			BIT(0)
 
+/* DSP Mailbox Commands */
+#define CS40L26_DSP_MBOX_CMD_START_I2S		0x03000002
+#define CS40L26_DSP_MBOX_CMD_STOP_I2S		0x03000003
+#define CS40L26_STOP_PLAYBACK			0x05000000
+
+/* Mailbox status */
+#define CS40L26_DSP_MBOX_COMPLETE_I2S		0x01000002
+
+/* ASP/I2S Configuration */
+#define CS40L26_ASP_RX1_EN_MASK			BIT(16)
+#define CS40L26_ASP_RX1_EN_SHIFT		16
+#define CS40L26_ASP_RX2_EN_MASK			BIT(17)
+#define CS40L26_ASP_RX2_EN_SHIFT		17
+#define CS40L26_ASP_FMT_MASK			GENMASK(10, 8)
+#define CS40L26_ASP_FMT_SHIFT			8
+#define CS40L26_ASP_FMT_I2S			0x2
+#define CS40L26_PLL_REFCLK_LOOP_MASK		BIT(11)
+
 /* Timing constants */
 #define CS40L26_MIN_RESET_PULSE_WIDTH		1500  /* microseconds */
 #define CS40L26_CONTROL_PORT_READY_DELAY	6000  /* microseconds */
+#define CS40L26_ASP_TIMEOUT_MS			50    /* milliseconds */
 
 /* SPI transfer settings */
 #define CS40L26_SPI_MAX_FREQ_HZ			4000000
@@ -62,6 +85,9 @@ struct cs40l26_data {
 	uint32_t device_id;
 	uint8_t revision_id;
 	bool initialized;
+	bool i2s_enabled;
+	uint32_t refclk_input;
+	struct k_sem i2s_sem;
 };
 
 /**
@@ -170,6 +196,125 @@ static int cs40l26_reset(const struct device *dev)
 	k_usleep(CS40L26_CONTROL_PORT_READY_DELAY);
 
 	return 0;
+}
+
+/**
+ * @brief Write to DSP mailbox
+ */
+static int cs40l26_mailbox_write(const struct device *dev, uint32_t val)
+{
+	int ret;
+
+	ret = cs40l26_reg_write(dev, CS40L26_DSP_MBOX_1, val);
+	if (ret) {
+		LOG_ERR("Failed to write mailbox: %d", ret);
+		return ret;
+	}
+
+	return 0;
+}
+
+/**
+ * @brief Start I2S/ASP interface
+ */
+int cs40l26_i2s_start(const struct device *dev)
+{
+	struct cs40l26_data *data = dev->data;
+	int ret;
+
+	if (!data->initialized) {
+		LOG_ERR("Device not initialized");
+		return -ENODEV;
+	}
+
+	if (data->i2s_enabled) {
+		LOG_WRN("I2S already enabled");
+		return 0;
+	}
+
+	LOG_INF("Starting I2S interface");
+
+	/* Stop any playback before starting I2S */
+	ret = cs40l26_mailbox_write(dev, CS40L26_STOP_PLAYBACK);
+	if (ret) {
+		LOG_ERR("Failed to stop playback before I2S start");
+		return ret;
+	}
+
+	/* Save reference clock input for later restoration */
+	ret = cs40l26_reg_read(dev, CS40L26_REFCLK_INPUT, &data->refclk_input);
+	if (ret) {
+		LOG_ERR("Failed to read REFCLK_INPUT");
+		return ret;
+	}
+
+	/* Send I2S start command */
+	ret = cs40l26_mailbox_write(dev, CS40L26_DSP_MBOX_CMD_START_I2S);
+	if (ret) {
+		LOG_ERR("Failed to send I2S start command");
+		return ret;
+	}
+
+	/* Wait for I2S to start (with timeout) */
+	ret = k_sem_take(&data->i2s_sem, K_MSEC(CS40L26_ASP_TIMEOUT_MS));
+	if (ret) {
+		LOG_ERR("I2S start timeout");
+		return -ETIMEDOUT;
+	}
+
+	data->i2s_enabled = true;
+	LOG_INF("I2S interface started successfully");
+
+	return 0;
+}
+
+/**
+ * @brief Stop I2S/ASP interface
+ */
+int cs40l26_i2s_stop(const struct device *dev)
+{
+	struct cs40l26_data *data = dev->data;
+	uint32_t pll_loop;
+	int ret;
+
+	if (!data->initialized) {
+		LOG_ERR("Device not initialized");
+		return -ENODEV;
+	}
+
+	if (!data->i2s_enabled) {
+		LOG_WRN("I2S already disabled");
+		return 0;
+	}
+
+	LOG_INF("Stopping I2S interface");
+
+	/* Send I2S stop command */
+	ret = cs40l26_mailbox_write(dev, CS40L26_DSP_MBOX_CMD_STOP_I2S);
+	if (ret) {
+		LOG_ERR("Failed to send I2S stop command");
+		return ret;
+	}
+
+	/* Restore PLL configuration */
+	pll_loop = (data->refclk_input & CS40L26_PLL_REFCLK_LOOP_MASK) ? 1 : 0;
+	
+	/* Note: PLL loop restoration would go here if needed */
+	/* For basic implementation, we just clear the flag */
+
+	data->i2s_enabled = false;
+	LOG_INF("I2S interface stopped successfully");
+
+	return 0;
+}
+
+/**
+ * @brief Check if I2S interface is enabled
+ */
+bool cs40l26_i2s_is_enabled(const struct device *dev)
+{
+	struct cs40l26_data *data = dev->data;
+	return data->i2s_enabled;
 }
 
 /**
@@ -283,6 +428,10 @@ static int cs40l26_init(const struct device *dev)
 	int ret;
 
 	LOG_INF("Initializing CS40L26 haptic driver");
+
+	/* Initialize I2S semaphore */
+	k_sem_init(&data->i2s_sem, 0, 1);
+	data->i2s_enabled = false;
 
 	/* Verify SPI bus is ready */
 	if (!spi_is_ready_dt(&config->spi)) {

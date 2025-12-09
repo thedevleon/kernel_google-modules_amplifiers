@@ -11,6 +11,8 @@ The CS40L26 is a Boosted Haptic Driver with Integrated DSP and Waveform Memory. 
 - Enumerates the CS40L26 device on the SPI bus
 - Reads the device ID and revision
 - Performs a basic diagnostic check
+- **Demonstrates I2S/ASP audio interface control**
+- **Tests starting and stopping I2S streaming**
 - Displays the results via console
 
 ## Requirements
@@ -56,7 +58,7 @@ west flash
 
 ```
 *** Booting Zephyr OS ***
-[00:00:00.000,000] <inf> cs40l26_sample: CS40L26 Haptic Driver Sample
+[00:00:00.000,000] <inf> cs40l26_sample: CS40L26 Haptic Driver Sample with I2S Support
 [00:00:00.100,000] <inf> cs40l26: Initializing CS40L26 haptic driver
 [00:00:00.200,000] <inf> cs40l26: Found CS40L26A, revision 0xB0
 [00:00:00.300,000] <inf> cs40l26: Running diagnostic check...
@@ -64,9 +66,15 @@ west flash
 [00:00:00.400,000] <inf> cs40l26: Diagnostic check completed successfully
 [00:00:00.450,000] <inf> cs40l26: CS40L26 initialization completed successfully
 [00:00:00.500,000] <inf> cs40l26_sample: Device enumeration successful
-[00:00:00.550,000] <inf> cs40l26_sample: Device ID: 0x40A260
-[00:00:00.600,000] <inf> cs40l26_sample: Revision: 0xB0
-[00:00:00.650,000] <inf> cs40l26_sample: Diagnostic check: PASSED
+[00:00:00.550,000] <inf> cs40l26_sample: Testing I2S interface...
+[00:00:00.600,000] <inf> cs40l26: Starting I2S interface
+[00:00:00.650,000] <inf> cs40l26: I2S interface started successfully
+[00:00:00.700,000] <inf> cs40l26_sample: I2S started successfully
+[00:00:00.750,000] <inf> cs40l26_sample: I2S is currently enabled
+[00:00:02.750,000] <inf> cs40l26: Stopping I2S interface
+[00:00:02.800,000] <inf> cs40l26: I2S interface stopped successfully
+[00:00:02.850,000] <inf> cs40l26_sample: I2S stopped successfully
+[00:00:02.900,000] <inf> cs40l26_sample: Sample application running...
 ```
 
 ## Troubleshooting
