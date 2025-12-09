@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2024 Cirrus Logic, Inc.
+
+name: cs40l26
+build:
+  cmake: zephyr
+  kconfig: zephyr/drivers/haptic/Kconfig
+  settings:
+    dts_root: zephyr
+    board_root: zephyr

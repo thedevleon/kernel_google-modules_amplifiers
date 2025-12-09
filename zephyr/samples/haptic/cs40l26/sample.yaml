@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2024 Cirrus Logic, Inc.
+
+sample:
+  name: CS40L26 Haptic Driver Sample
+  description: Sample application demonstrating CS40L26 haptic driver usage
+tests:
+  sample.drivers.haptic.cs40l26:
+    tags: haptic spi
+    depends_on: spi gpio
+    harness: console
+    harness_config:
+      type: multi_line
+      regex:
+        - "CS40L26 Haptic Driver Sample"
+        - "Device enumeration successful"

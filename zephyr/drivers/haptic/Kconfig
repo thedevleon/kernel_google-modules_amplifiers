@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2024 Cirrus Logic, Inc.
+
+config CS40L26
+	bool "Cirrus Logic CS40L26 Haptic Driver"
+	depends on SPI
+	help
+	  Enable driver for CS40L26 Boosted Haptic Amplifier with
+	  Integrated DSP and Waveform Memory.
+
+if CS40L26
+
+config CS40L26_INIT_PRIORITY
+	int "CS40L26 initialization priority"
+	default 80
+	help
+	  CS40L26 device driver initialization priority.
+	  Must be initialized after SPI.
+
+module = CS40L26
+module-str = cs40l26
+source "subsys/logging/Kconfig.template.log_config"
+
+endif # CS40L26
